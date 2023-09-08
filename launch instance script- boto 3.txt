@@ -1,0 +1,30 @@
+import boto3
+
+def lambda_handler(event, context):
+    ec2 = boto3.client('ec2')
+
+    # specify the ID of the Amazon Machine Image (AMI) 
+    ami_id = 'ami-0ff8a91507f77f867'
+
+    # specify the instance type
+    instance_type = 't2.micro'
+
+    # specify the key pair name 
+    key_name = 'mykeypair'
+
+    # specify the security group 
+    security_group = 'mysecuritygroup'
+
+    # specify the subnet 
+    subnet_id = 'subnet-01234567890abcdef0'
+
+    # launch the instance
+    ec2.run_instances(
+        ImageId=ami_id,
+        InstanceType=instance_type,
+        KeyName=key_name,
+        SecurityGroupIds=[security_group],
+        SubnetId=subnet_id,
+        MinCount=1,
+        MaxCount=1
+    )
