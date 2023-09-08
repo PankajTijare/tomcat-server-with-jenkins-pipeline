@@ -1,0 +1,192 @@
+1.	Create VPC (My-VPC) CIDR = 10.0.0.0/16
+
+2.	Create Subnets : -
+(Pub-Subnet1 = 10.0.0.0/24) eu-west-3b 
+(Pub-Subnet2 = 10.0.1.0/24) eu-west-3a
+(Pri-Subnet2 = 10.0.3.0/24) eu-west-3c
+(Pri-Subnet1 = 10.0.2.0/24) eu-west-3b
+
+3.	Create Internet Gateway: - Name (MY-IGW)
+Attach to VPC -- Select (my-VPC)
+
+4.	Create NAT Gateway : - 
+Name (NAT-GW)
+Subnet (Select: Pub-Subnet2) 
+Allocate Elastic IP 
+Creatre NAT Gateway
+
+5.	Create Route Tables (Public) : -
+Name (PUB-Route) 
+Edit Subnet Association = Select (Pub-Subnet1, Pub-Subnet2) 
+Save Association
+PUB-Route = Edit Routes -- Add (IGW) 
+Save
+
+6.	Create Route Tables (Private) : -
+Name (PRI-Route) 
+Edit Subnet Association = Select (Pri-Subnet1, Pri-Subnet2) 
+Save Association
+PUB-Route = Edit Routes -- Add (NAT-GW) 
+Save
+
+7.	Create Security Group = Name(3Tier), VPC (My-VPC), Inbound rules (SSH, HTTP, Custom TCP=8080, MY SQL/Aurora=3306) 
+ 
+8.	Launch Instance (Public Jump-Server) : -
+	Name (Jump-Server)
+	Select (AMI : Amazon Linux)
+Select (t2.micro)
+Create Key Pair
+Edit Network Setting : - 
+Select VPC (My-VPC) -- Subnet (Pub-Subnet1) 
+Auto-Assign public IP (Enable) -- Security Group Select=(3Tier)
+Storage (gp2) 
+Review and Launch
+
+9.	Launch Instance (Public Front-End-Server) : -
+	Name (Front-End-Server)
+	Select (AMI : Amazon Linux)
+Select (t2.micro)
+Create Key Pair
+Edit Network Setting : - 
+Select VPC (My-VPC) -- Subnet (Pub-Subnet2) 
+Auto-Assign public IP (Enable) -- Security Group Select=(3Tier)
+Storage (gp2) 
+Review and Launch
+
+10.	Launch Instance (Private Tomcat-Server) : -
+	Name (Tomcat-Server)
+	Select (AMI : Amazon Linux)
+Select (t2.micro)
+Create Key Pair
+Edit Network Setting : - 
+Select VPC (My-VPC) -- Subnet (Pri-Subnet1) 
+Auto-Assign public IP (Disable) -- Security Group Select=(3Tier)
+Storage (gp2) 
+Review and Launch
+
+11.	Launch Instance (Private MariaDB-Server) : -
+	Name (MariaDB-Server)
+	Select (AMI : Amazon Linux)
+Select (t2.micro)
+Create Key Pair
+Edit Network Setting : - 
+Select VPC (My-VPC) -- Subnet (Pri-Subnet2) 
+Auto-Assign public IP (Disable) -- Security Group Select=(3Tier)
+Storage (gp2) 
+Review and Launch
+
+12.	Create RDS : -
+	RDS
+Create Subnet Group :-
+Name (DB-Subnet)
+VPC (My-VPC)
+Description (3-Tier-RDS-Subnet)
+Add Subnet Choose AZ (eu-west-3b, eu-west-3c <You have to choose Subnet where you will configure RDS>) 
+Subnet (10.0.3.0/24, 10.0.2.0/24)
+Create Subnet Group
+
+RDS
+Create Database
+Master Name = admin
+Master Password = pass1234
+VPC = My-VPC
+Subnet Group = DB-Subnet
+VPC Security Group (Choose Existing) -- Select (3Tier) 
+Availibility Zone (eu-west-3c)
+Create Database
+
+13.	Connect/Launch Jump-Server : -
+	Take SSH of MariaDB-Server
+	sudo su
+yum install  mysql -y
+mysql -h (Paste RDS Endpoint) -u admin -ppass1234
+		>CREATE DATABASE studentapp;
+>show databases;
+>use studentapp;
+>CREATE TABLE if not exists students(student_id INT NOT NULL AUTO_INCREMENT,
+  student_name VARCHAR(100) NOT NULL,
+  student_addr VARCHAR(100) NOT NULL,
+  student_age VARCHAR(3) NOT NULL,
+  student_qual VARCHAR(20) NOT NULL,
+  student_percent VARCHAR(10) NOT NULL,
+  student_year_passed VARCHAR(10) NOT NULL,
+  PRIMARY KEY (student_id)
+  );
+>(Ctrl + D)
+
+14.	Connect/Launch Jump-Server : -
+	Take SSH of Tomcat-Server
+	sudo su
+yum install java -y
+yum install java-openjdk -y
+	cd /mnt (Or any other directory)
+	wget <Download link of Tomcat 9>
+(https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.71/bin/apache-tomcat-9.0.71.zip)
+	unzip <Tomcat directory>
+	cd <Tomcat directory>
+	cd <Tomcat directory>/bin
+chmod +x catalina.sh
+./catalina.sh start
+cd <Tomcat directory>/webapps
+curl -O https://s3-us-west-2.amazonaws.com/studentapi-cit/student.war
+cd <Tomcat directory>/lib
+curl -O https://s3-us-west-2.amazonaws.com/studentapi-cit/mysql-connector.jar
+cd <Tomcat directory>/conf
+vim context.xml
+( Paste below code Between
+<Context>
+	( Here )
+</Context>
+In context.xml file)
+<Resource name="jdbc/TestDB" auth="Container" type="javax.sql.DataSource"
+maxTotal="500" maxIdle="30" maxWaitMillis="1000" username="USER" password="password" driverClassName="com.mysql.jdbc.Driver" url="jdbc:mysql://(RDS-Endpoint):3306/studentapp?useUnicode=yes&amp;characterEncoding=utf8"/>
+	:wq! (Save and Exit)
+	cd <Tomcat directory>/bin
+./catalina.sh stop
+./catalina.sh start
+
+15.	Open EC2 Console : -
+Create Target Group : -
+Target Name (TG1)
+Protocol(http):8080
+VPC (My-VPC)
+Next
+Select (Tomcat-Server)
+Include as Pending Below
+Create Target Group
+
+Create Load Balancer : - 
+Application Load Balancer
+Name (LB)
+Inetrnet facing (for internet)
+VPC (My-VPC)
+Mapping - Subnet(eu-west-3b=Pub-Subnet1, eu-west-3a= Pub-Subnet2)   	Security Group ( 3Tier)
+Listner (HTTP: port:80) Select (TG1)
+Create Load Balancer 
+
+Copy Load Balancer’s DNS/student
+HIT in New Tab (It will open Student Registration Application)
+
+
+
+16.	Connect/Launch Front-End-Server : -
+	sudo su
+yum install httpd -y
+cd /var/www/html/
+curl -O https://s3-us-west-2.amazonaws.com/studentapi-cit/index.html
+		vim index.html
+		(Make this changes in html code)
+		<a href = "(Paste Load Balancer’s DNS)/student">
+		:wq! (Save and Exit)
+		systemctl restart httpd
+
+17.	Working : -
+	HIT Public IP of Front-End-Server
+		Student Application’s Front Page Will Appear 
+Click on Enter Student Application (It will open Student Registration Application)
+Enter Details and then Click on Register Button
+And Now viewStudent Page will Appear (It will Display Student Detail)
+You can also check Student Detail in MariaDB-Server using following commands
+use studentapp (Database Name);
+select * from students (Table Name);
+
