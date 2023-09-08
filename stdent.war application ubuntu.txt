@@ -1,0 +1,23 @@
+FROM ubuntu
+RUN mkdir /mnt/tomcat
+WORKDIR /mnt/tomcat
+RUN apt-get update && apt-get upgrade -y
+RUN apt-get -y install openjdk-8-jdk
+RUN apt install curl -y
+RUN apt install wget -y
+RUN curl -O https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.73/bin/apache-tomcat-9.0.73.tar.gz
+RUN tar -xzvf apache*.tar.gz
+RUN mv apache-tomcat-9.0.73/* /mnt/tomcat/.
+
+## student.war
+WORKDIR /mnt/tomcat/webapps
+RUN curl -O -L https://s3-us-west-2.amazonaws.com/studentapi-cit/student.war
+
+## mysql-connector.jar
+WORKDIR /mnt/tomcat/lib
+RUN curl -O -L https://s3-us-west-2.amazonaws.com/studentapi-cit/mysql-connector.jar
+
+EXPOSE 8080
+CMD ["/mnt/tomcat/bin/catalina.sh", "run"]
+
+
