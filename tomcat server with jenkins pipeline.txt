@@ -1,0 +1,32 @@
+pipeline {
+    agent any
+    stages{
+        stage('deploy-to-tomcat-server') {
+            steps {
+                sh'''
+                sudo apt update -y
+                sudo apt-get install openjdk-11-jre -y
+                sudo wget https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.74/bin/apache-tomcat-9.0.74.tar.gz
+                sudo tar -xzvf apache-tomcat-9.0.74.tar.gz -C /opt
+                sudo wget https://s3-us-west-2.amazonaws.com/studentapi-cit/student.war -P /opt/apache-tomcat-9.0.74/webapps
+                sudo wget https://s3-us-west-2.amazonaws.com/studentapi-cit/mysql-connector.jar -P /opt/apache-tomcat-9.0.74/lib
+                sudo sed -i '69i\
+                    <Connector port="8000" protocol="HTTP/1.1"\
+                            connectionTimeout="20000"\
+                            redirectPort="8443"\
+                            maxParameterCount="1000"\
+                        />' /opt/apache-tomcat-9.0.74/conf/server.xml
+                sudo sh /opt/apache-tomcat-9.0.74/bin/startup.sh
+                '''
+            }
+        }
+    }
+}
+
+sudo su 
+cd /var/lib
+ls
+visudo
+
+type "jenkins ALL=(ALL:ALL) NOPASSWD: ALL" this behind the root and exit 
+then go to jenkins and build now 
