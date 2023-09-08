@@ -1,0 +1,74 @@
+1. configure aws cli 
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+    unzip awscliv2.zip
+    sudo ./aws/install
+    aws configure 
+
+
+2. Install IAM-authenticator 
+    curl -o aws-iam-authenticator https://s3.us-west-2.amazonaws.com/amazon-eks/1.21.2/2021-07-05/bin/linux/amd64/aws-iam-authenticator
+    chmod +x ./aws-iam-authenticator
+    mkdir -p $HOME/bin && cp ./aws-iam-authenticator $HOME/bin/aws-iam-authenticator && export PATH=$PATH:$HOME/bin
+    echo 'export PATH=$PATH:$HOME/bin' >> ~/.bashrc
+    aws-iam-authenticator help
+
+3. Install kubectl 
+    curl -o kubectl https://s3.us-west-2.amazonaws.com/amazon-eks/1.22.6/2022-03-09/bin/linux/amd64/kubectl
+    chmod +x ./kubectl
+    mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$PATH:$HOME/bin
+    echo 'export PATH=$PATH:$HOME/bin' >> ~/.bashrc
+    kubectl version --short --client
+
+
+5. Install eksctl 
+    curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+    sudo mv /tmp/eksctl /usr/local/bin
+    eksctl version
+
+6. create EKS cluster using eksctl
+     eksctl create cluster --name <cluster-name> --node-type t2.medium --nodes 2 --nodes-min 1 --nodes-max 3 --region us-east-1
+
+7. kubectl update kube-config.
+    $ aws sts get-caller-identity
+    $  aws --version
+    $ aws eks update-kubeconfig --region us-east-1 --name <cluster name>
+
+    it will create $/home/user/.kube/config file. 
+
+8. delete cluster 
+    $ eksctl delete cluster -- name <cluster-name>
+	
+	
+	
+ingress
+
+1. Deployment 
+2. service nodeport
+3. https://docs.aws.amazon.com/eks/latest/userguide/aws-load-balancer-controller.html
+
+    a. curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.4.7/docs/install/iam_policy.json
+	b. aws iam create-policy \
+    --policy-name AWSLoadBalancerControllerIAMPolicy \
+    --policy-document file://iam_policy.json
+	c. a. oidc_id=$(aws eks describe-cluster --name lala --query "cluster.identity.oidc.issuer" --output text | cut -d '/' -f 5)
+		b. aws iam list-open-id-connect-providers | grep $oidc_id | cut -d "/" -f4
+		c. eksctl utils associate-iam-oidc-provider --cluster lala --approve
+	d. eksctl create iamserviceaccount \
+  --cluster=lala \
+  --namespace=kube-system \
+  --name=aws-load-balancer-controller \
+  --role-name AmazonEKSLoadBalancerControllerRole \
+  --attach-policy-arn=arn:aws:iam::129834587217:policy/AWSLoadBalancerControllerIAMPolicy \
+  --approve  --region=us-east-1
+  
+4. kubectl apply \
+    --validate=false \
+    -f https://github.com/jetstack/cert-manager/releases/download/v1.5.4/cert-manager.yaml
+
+5.curl -Lo v2_4_7_full.yaml https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/download/v2.4.7/v2_4_7_full.yaml
+
+sed -i.bak -e '561,569d' ./v2_4_7_full.yaml
+
+sed -i.bak -e 's|your-cluster-name|lala|' ./v2_4_7_full.yaml
+kubectl apply -f v2_4_7_full.yaml
+
